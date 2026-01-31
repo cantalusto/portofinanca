@@ -20,7 +20,9 @@ import {
   Percent,
   Wallet,
   Target,
-  AlertCircle
+  AlertCircle,
+  Info,
+  HelpCircle
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -52,6 +54,12 @@ const App: React.FC = () => {
   const [aiInsight, setAiInsight] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [showReport, setShowReport] = useState(false);
+  const [explanation, setExplanation] = useState<{
+    title: string; 
+    text?: string;
+    type?: 'text' | 'list';
+    data?: { label: string; value: string; color: string; percent?: string }[];
+  } | null>(null);
   
   // Form State
   const [formType, setFormType] = useState<TransactionType>(TransactionType.INCOME);
@@ -321,6 +329,56 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {/* Explanation Modal */}
+      {explanation && (
+        <div className="fixed inset-0 z-[70] bg-slate-900/60 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4 animate-in fade-in duration-200" onClick={() => setExplanation(null)}>
+          <div 
+            className="bg-white w-full max-w-sm rounded-t-[2rem] sm:rounded-3xl shadow-2xl p-6 animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-10 duration-300"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-start mb-4">
+              <div className="bg-cyan-100 p-3 rounded-2xl">
+                <Info className="w-6 h-6 text-cyan-600" />
+              </div>
+              <button onClick={() => setExplanation(null)} className="p-2 bg-slate-50 rounded-full text-slate-400">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <h3 className="text-xl font-bold text-slate-800 mb-2">{explanation.title}</h3>
+            
+            {explanation.text && (
+              <p className="text-slate-500 leading-relaxed text-sm mb-4">
+                {explanation.text}
+              </p>
+            )}
+
+            {explanation.type === 'list' && explanation.data && (
+              <div className="space-y-3 mt-4 max-h-60 overflow-y-auto pr-2">
+                {explanation.data.map((item, idx) => (
+                  <div key={idx} className="flex justify-between items-center text-sm p-2 bg-slate-50 rounded-xl">
+                    <div className="flex items-center gap-3">
+                      <div className="w-3 h-3 rounded-full shadow-sm" style={{ backgroundColor: item.color }}></div>
+                      <div>
+                        <p className="font-semibold text-slate-700">{item.label}</p>
+                        <p className="text-[10px] text-slate-400">{item.percent} do total</p>
+                      </div>
+                    </div>
+                    <span className="font-bold text-slate-800">{item.value}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <button 
+              onClick={() => setExplanation(null)}
+              className="w-full mt-6 bg-slate-100 text-slate-600 font-bold py-3 rounded-xl hover:bg-slate-200 transition-colors"
+            >
+              Entendi
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <header className="p-6 bg-gradient-to-br from-[#0891B2] to-[#155E75] text-white shadow-lg rounded-b-[2.5rem] relative overflow-hidden">
         
@@ -396,23 +454,94 @@ const App: React.FC = () => {
         {/* Dashboard Tab */}
         {activeTab === 'dashboard' && (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {/* Extended Metrics Cards */}
+            <div className="grid grid-cols-2 gap-4">
+               <div 
+                  onClick={() => setExplanation({
+                    title: "Detalhamento da Margem",
+                    type: 'list',
+                    text: "Cálculo da eficiência do seu aluguel no período:",
+                    data: [
+                      { label: 'Receita Total', value: `R$ ${summary.income.toLocaleString('pt-BR')}`, color: '#10B981' },
+                      { label: 'Despesas Totais', value: `R$ ${summary.expenses.toLocaleString('pt-BR')}`, color: '#F43F5E' },
+                      { label: 'Lucro Líquido', value: `R$ ${summary.balance.toLocaleString('pt-BR')}`, color: '#0891B2' }
+                    ]
+                  })}
+                  className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 flex flex-col justify-between relative overflow-hidden cursor-help hover:shadow-md transition-all active:scale-95"
+               >
+                  <div className="absolute right-0 top-0 p-4 opacity-10">
+                    <Percent className="w-16 h-16 text-cyan-600" />
+                  </div>
+                  <div className="absolute top-3 right-3 opacity-20">
+                     <HelpCircle className="w-4 h-4 text-slate-400" />
+                  </div>
+                  <div>
+                    <p className="text-slate-400 text-[10px] font-bold uppercase tracking-wider mb-1">Margem de Lucro</p>
+                    <h3 className={`text-2xl font-extrabold ${summary.margin >= 50 ? 'text-emerald-500' : summary.margin > 0 ? 'text-cyan-600' : 'text-rose-500'}`}>
+                      {summary.margin.toFixed(0)}%
+                    </h3>
+                  </div>
+                  <div className="w-full bg-slate-100 h-1.5 rounded-full mt-3 overflow-hidden">
+                    <div 
+                      className={`h-full rounded-full ${summary.margin >= 50 ? 'bg-emerald-500' : summary.margin > 0 ? 'bg-cyan-500' : 'bg-rose-500'}`} 
+                      style={{ width: `${Math.max(0, Math.min(100, summary.margin))}%` }}
+                    ></div>
+                  </div>
+               </div>
+
+               <div 
+                 onClick={() => setExplanation({
+                    title: "Diagnóstico Financeiro",
+                    type: 'list',
+                    text: "Indicadores de saúde do seu negócio:",
+                    data: [
+                      { label: 'Margem Atual', value: `${summary.margin.toFixed(1)}%`, color: summary.margin > 30 ? '#10B981' : '#F59E0B' },
+                      { label: 'Status', value: summary.margin > 30 ? 'Ótima' : summary.margin > 0 ? 'Atenção' : 'Crítica', color: '#64748b' },
+                      { label: 'Balanço', value: summary.balance > 0 ? 'Positivo' : 'Negativo', color: summary.balance > 0 ? '#10B981' : '#F43F5E' }
+                    ]
+                 })}
+                 className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 flex flex-col justify-between cursor-help hover:shadow-md transition-all active:scale-95 relative"
+               >
+                  <div className="absolute top-3 right-3 opacity-20">
+                     <HelpCircle className="w-4 h-4 text-slate-400" />
+                  </div>
+                  <div>
+                    <p className="text-slate-400 text-[10px] font-bold uppercase tracking-wider mb-1">Saúde Financeira</p>
+                    <div className="flex items-center gap-2">
+                       {summary.margin > 30 ? (
+                         <span className="text-emerald-500 font-bold flex items-center gap-1 text-sm"><Target className="w-4 h-4" /> Ótima</span>
+                       ) : summary.margin > 0 ? (
+                         <span className="text-amber-500 font-bold flex items-center gap-1 text-sm"><AlertCircle className="w-4 h-4" /> Atenção</span>
+                       ) : (
+                         <span className="text-rose-500 font-bold flex items-center gap-1 text-sm"><AlertCircle className="w-4 h-4" /> Crítica</span>
+                       )}
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-2 leading-tight">
+                    {summary.margin > 30 
+                      ? "Seu flat está gerando excelente retorno." 
+                      : "Revise custos para melhorar a margem."}
+                  </p>
+               </div>
+            </div>
+
             {/* Insights Button */}
             <div 
               onClick={fetchAiInsights}
-              className="group bg-gradient-to-r from-violet-600 to-indigo-600 p-[1px] rounded-3xl shadow-lg cursor-pointer active:scale-95 transition-all"
+              className="group bg-gradient-to-r from-cyan-600 to-teal-600 p-[1px] rounded-3xl shadow-lg cursor-pointer active:scale-95 transition-all"
             >
               <div className="bg-white p-4 rounded-[23px] flex items-center justify-between h-full group-hover:bg-opacity-95 transition-all">
                 <div className="flex items-center gap-4">
-                  <div className="bg-violet-100 p-3 rounded-2xl group-hover:scale-110 transition-transform duration-300">
-                    <Bot className="w-6 h-6 text-violet-600" />
+                  <div className="bg-cyan-100 p-3 rounded-2xl group-hover:scale-110 transition-transform duration-300">
+                    <Briefcase className="w-6 h-6 text-cyan-600" />
                   </div>
                   <div>
-                    <h3 className="font-bold text-slate-800">Consultoria IA</h3>
+                    <h3 className="font-bold text-slate-800">Consultoria Estratégica</h3>
                     <p className="text-xs text-slate-500">Análise do {getPeriodLabel().toLowerCase()}</p>
                   </div>
                 </div>
-                <div className="bg-violet-50 p-2 rounded-full">
-                  <ChevronRight className="w-5 h-5 text-violet-600" />
+                <div className="bg-cyan-50 p-2 rounded-full">
+                  <ChevronRight className="w-5 h-5 text-cyan-600" />
                 </div>
               </div>
             </div>
@@ -446,57 +575,196 @@ const App: React.FC = () => {
               </div>
             )}
 
-            {/* Categories Pie - Only show if there is data */}
-            {filteredTransactions.length > 0 ? (
-              <>
-                 <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-                  <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
-                    <PieChartIcon className="w-5 h-5 text-teal-600" /> Despesas por Categoria
-                  </h3>
-                  <div className="h-56 flex items-center justify-center relative">
+            {/* Evolution Area Chart */}
+            <div 
+              onClick={() => {
+                const startVal = balanceEvolutionData.length > 0 ? balanceEvolutionData[0].value : 0;
+                const endVal = balanceEvolutionData.length > 0 ? balanceEvolutionData[balanceEvolutionData.length - 1].value : 0;
+                const growth = endVal - startVal;
+                setExplanation({
+                  title: "Evolução do Patrimônio",
+                  type: 'list',
+                  text: "Variação acumulada do seu saldo neste período:",
+                  data: [
+                    { label: 'Saldo Inicial', value: `R$ ${startVal.toLocaleString('pt-BR')}`, color: '#64748b' },
+                    { label: 'Saldo Atual', value: `R$ ${endVal.toLocaleString('pt-BR')}`, color: '#0891B2' },
+                    { label: 'Crescimento Real', value: `R$ ${growth.toLocaleString('pt-BR')}`, color: growth >= 0 ? '#10B981' : '#F43F5E' }
+                  ]
+                });
+              }}
+              className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 cursor-help hover:shadow-md transition-all active:scale-[0.99] relative"
+            >
+               <div className="absolute top-6 right-6 opacity-20">
+                  <HelpCircle className="w-5 h-5 text-slate-400" />
+               </div>
+               <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+                <TrendingUp className="w-5 h-5 text-cyan-600" /> Evolução Patrimonial
+               </h3>
+               <div className="h-48 w-full">
+                 {balanceEvolutionData.length > 0 ? (
                     <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={chartData}
-                          innerRadius={65}
-                          outerRadius={85}
-                          paddingAngle={5}
-                          dataKey="value"
-                          stroke="none"
-                        >
-                          {chartData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                          ))}
-                        </Pie>
+                      <AreaChart data={balanceEvolutionData}>
+                        <defs>
+                          <linearGradient id="colorBalance" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#0891B2" stopOpacity={0.2}/>
+                            <stop offset="95%" stopColor="#0891B2" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#64748b'}} />
                         <Tooltip 
-                          contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                          contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
                         />
-                      </PieChart>
+                        <Area type="monotone" dataKey="value" stroke="#0891B2" strokeWidth={3} fillOpacity={1} fill="url(#colorBalance)" />
+                      </AreaChart>
                     </ResponsiveContainer>
-                    {/* Center Text */}
-                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                      <span className="text-xs text-slate-400 font-medium">Total Despesas</span>
-                      <span className="text-lg font-bold text-slate-700">R$ {summary.expenses.toLocaleString('pt-BR', { notation: 'compact' })}</span>
+                 ) : (
+                    <div className="h-full flex items-center justify-center text-slate-400 text-sm italic">
+                      Sem dados suficientes.
                     </div>
-                  </div>
-                  {/* Legend */}
-                  <div className="grid grid-cols-2 gap-2 mt-2">
-                    {chartData.slice(0, 4).map((entry, index) => (
-                      <div key={index} className="flex items-center gap-2 text-xs text-slate-500">
-                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }}></div>
-                        <span className="truncate">{entry.name}</span>
+                 )}
+               </div>
+            </div>
+
+            {/* Row with Bar Chart and Categories */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Monthly Bar Chart */}
+              <div 
+                onClick={() => setExplanation({
+                  title: "Resumo do Fluxo de Caixa",
+                  type: 'list',
+                  text: "Comparativo total de Entradas e Saídas do período:",
+                  data: [
+                    { label: 'Total Entradas', value: `R$ ${summary.income.toLocaleString('pt-BR')}`, color: '#0891B2' },
+                    { label: 'Total Saídas', value: `R$ ${summary.expenses.toLocaleString('pt-BR')}`, color: '#F43F5E' },
+                    { label: 'Saldo Final', value: `R$ ${summary.balance.toLocaleString('pt-BR')}`, color: summary.balance >= 0 ? '#10B981' : '#F43F5E' }
+                  ]
+                })}
+                className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 cursor-help hover:shadow-md transition-all active:scale-[0.99] relative"
+              >
+                <div className="absolute top-6 right-6 opacity-20">
+                  <HelpCircle className="w-5 h-5 text-slate-400" />
+                </div>
+                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+                  <CalendarDays className="w-5 h-5 text-cyan-600" /> Fluxo de Caixa
+                </h3>
+                <div className="h-48 w-full">
+                  {monthlyData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={monthlyData}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#64748b'}} />
+                        <Tooltip 
+                          contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                          cursor={{fill: '#f8fafc'}}
+                        />
+                        <Bar dataKey="income" fill="#0891B2" radius={[4, 4, 0, 0]} barSize={20} />
+                        <Bar dataKey="expense" fill="#F43F5E" radius={[4, 4, 0, 0]} barSize={20} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-full flex items-center justify-center text-slate-400 text-sm italic">
+                      Nenhum dado para exibir gráfico.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Categories Pie */}
+              <div 
+                onClick={() => setExplanation({
+                  title: "Detalhamento de Gastos",
+                  type: 'list',
+                  text: "Visualize exatamente para onde foi cada centavo neste período.",
+                  data: chartData.map((item, index) => ({
+                    label: item.name,
+                    value: `R$ ${item.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+                    color: COLORS[index % COLORS.length],
+                    percent: summary.expenses > 0 ? `${((item.value / summary.expenses) * 100).toFixed(1)}%` : '0%'
+                  }))
+                })}
+                className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col cursor-help hover:shadow-md transition-all active:scale-[0.99] relative"
+              >
+                <div className="absolute top-6 right-6 opacity-20">
+                  <HelpCircle className="w-5 h-5 text-slate-400" />
+                </div>
+                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+                  <PieChartIcon className="w-5 h-5 text-teal-600" /> Distribuição de Gastos
+                </h3>
+                <div className="h-48 flex items-center justify-center relative">
+                   {chartData.length > 0 ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={chartData}
+                            innerRadius={65}
+                            outerRadius={85}
+                            paddingAngle={5}
+                            dataKey="value"
+                            stroke="none"
+                          >
+                            {chartData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip 
+                            contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                          />
+                        </PieChart>
+                      </ResponsiveContainer>
+                   ) : (
+                    <p className="text-slate-400 text-sm">Adicione gastos para ver a distribuição.</p>
+                   )}
+                   {/* Center Text */}
+                   {chartData.length > 0 && (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                        <span className="text-xs text-slate-400 font-medium">Total</span>
+                        <span className="text-lg font-bold text-slate-700">R$ {summary.expenses.toLocaleString('pt-BR', { notation: 'compact' })}</span>
+                      </div>
+                   )}
+                </div>
+              </div>
+            </div>
+
+            {/* Top Expenses List */}
+            {topExpenses.length > 0 && (
+              <div 
+                onClick={() => setExplanation({
+                  title: "Ranking Completo de Gastos",
+                  type: 'list',
+                  text: "Detalhamento de todos os seus centros de custo:",
+                  data: chartData.map((item, idx) => ({
+                      label: `${idx + 1}º ${item.name}`,
+                      value: `R$ ${item.value.toLocaleString('pt-BR')}`,
+                      color: '#F43F5E',
+                      percent: summary.expenses > 0 ? `${((item.value / summary.expenses) * 100).toFixed(1)}%` : '0%'
+                  }))
+                })}
+                className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 cursor-help hover:shadow-md transition-all active:scale-[0.99] relative"
+              >
+                 <div className="absolute top-6 right-6 opacity-20">
+                    <HelpCircle className="w-5 h-5 text-slate-400" />
+                 </div>
+                 <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+                    <Wallet className="w-5 h-5 text-rose-500" /> Maiores Custos
+                 </h3>
+                 <div className="space-y-4">
+                    {topExpenses.map((item, idx) => (
+                      <div key={idx} className="relative">
+                        <div className="flex justify-between text-sm mb-1 relative z-10">
+                          <span className="font-medium text-slate-700">{item.name}</span>
+                          <span className="font-bold text-slate-900">R$ {item.value.toLocaleString('pt-BR')}</span>
+                        </div>
+                        <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-rose-400 rounded-full" 
+                            style={{ width: `${item.percent}%` }}
+                          ></div>
+                        </div>
+                        <p className="text-[10px] text-slate-400 mt-1 text-right">{item.percent.toFixed(1)}% dos gastos</p>
                       </div>
                     ))}
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="text-center py-12 bg-white rounded-3xl border border-dashed border-slate-200">
-                <CalendarDays className="w-10 h-10 text-slate-200 mx-auto mb-3" />
-                <p className="text-slate-400 font-medium text-sm">Sem dados neste período</p>
-                <button onClick={() => setActiveTab('add')} className="mt-2 text-cyan-600 text-xs font-bold hover:underline">
-                  Adicionar Transação
-                </button>
+                 </div>
               </div>
             )}
           </div>
