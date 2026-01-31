@@ -1,0 +1,123 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
+
+body {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    background-color: #F8FAFC; /* Areia clara */
+    color: #334155; /* Cinza texto */
+    -webkit-tap-highlight-color: transparent;
+}
+
+.safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+}
+
+.glass-card {
+    background: #F1F5F9; /* Areia quente (cards) */
+    backdrop-filter: blur(12px);
+    border: 1px solid #E2E8F0;
+}
+
+/* Custom Scrollbar for better UI */
+::-webkit-scrollbar {
+    width: 6px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+/* Print Styles */
+@media print {
+    @page {
+        margin: 0;
+        size: auto;
+    }
+    
+    body {
+        background: white;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+
+    /* Hide everything by default */
+    body > div {
+        display: none !important;
+    }
+
+    /* Show only the modal content */
+    /* We need to target the modal wrapper specifically */
+    /* Since we can't easily target the specific React portal or div structure without classes,
+       we will use a specific class added to the modal content wrapper in App.tsx if possible,
+       or target the fixed overlay.
+    */
+    
+    /* A safer approach in single page apps:
+       Hide all root children EXCEPT the one containing the print content.
+       However, simpler CSS approach:
+    */
+    
+    /* Hide the main app container */
+    #root > div {
+        display: none !important;
+    }
+
+    /* We need to make the modal visible. 
+       In the React code, the modal is inside the main div. 
+       Let's adjust the strategy: 
+       We will hide everything, then show the .print-content and its parents? No, that's hard.
+       
+       Better strategy: 
+       Hide all UI elements interacting with the user (nav, buttons, inputs).
+       But our modal is an overlay.
+       
+       Let's use a class 'print:block' and 'print:hidden' utility from Tailwind if configured, 
+       but here we are writing raw CSS.
+    */
+
+    /* Reset the fixed positioning of the modal so it flows on the page */
+    .fixed.inset-0 {
+        position: relative !important;
+        inset: auto !important;
+        background: white !important;
+        display: block !important;
+        height: auto !important;
+        width: 100% !important;
+        z-index: 9999 !important;
+    }
+
+    .bg-white.w-full.max-w-lg {
+        max-width: 100% !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+        max-height: none !important;
+    }
+
+    .overflow-y-auto {
+        overflow: visible !important;
+    }
+
+    /* Hide the close button and print button inside the modal */
+    button {
+        display: none !important;
+    }
+
+    /* Ensure text colors are dark for print */
+    * {
+        color: black !important;
+        text-shadow: none !important;
+    }
+    
+    /* Re-enable colors for specific report elements if 'print-color-adjust' works */
+    .text-emerald-600 { color: #059669 !important; }
+    .text-rose-600 { color: #e11d48 !important; }
+    .text-cyan-600 { color: #0891b2 !important; }
+    .bg-emerald-50 { background-color: #ecfdf5 !important; }
+    .bg-rose-50 { background-color: #fff1f2 !important; }
+    .bg-cyan-50 { background-color: #ecfeff !important; }
+}

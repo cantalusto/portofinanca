@@ -1,0 +1,7 @@
+{
+  "name": "Porto Finanças - Flat Manager",
+  "description": "A sophisticated financial management tool for vacation rentals in Porto de Galinhas, featuring interactive dashboards and AI-powered insights.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
