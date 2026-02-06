@@ -54,6 +54,7 @@ const App: React.FC = () => {
   });
   
   const [activeTab, setActiveTab] = useState<'dashboard' | 'history' | 'add'>('dashboard');
+  const previousTabRef = React.useRef<'dashboard' | 'history'>('dashboard');
   const [timeRange, setTimeRange] = useState<TimeRange>('monthly');
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [historyTimeRange, setHistoryTimeRange] = useState<TimeRange>('monthly');
@@ -1326,7 +1327,14 @@ const App: React.FC = () => {
 
         <motion.button 
           whileTap={{ scale: 0.9 }}
-          onClick={() => setActiveTab('add')}
+          onClick={() => {
+            if (activeTab === 'add') {
+              setActiveTab(previousTabRef.current);
+            } else {
+              previousTabRef.current = activeTab as 'dashboard' | 'history';
+              setActiveTab('add');
+            }
+          }}
           className="mx-2 bg-slate-800 text-white p-5 rounded-full shadow-2xl shadow-slate-300 -mt-12 border-4 border-white hover:bg-slate-700 group relative"
         >
           <PlusCircle className={`w-8 h-8 transition-transform duration-300 ${activeTab === 'add' ? 'rotate-45' : 'group-hover:rotate-90'}`} />
