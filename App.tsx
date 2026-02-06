@@ -1,16 +1,17 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  LayoutDashboard, 
-  PlusCircle, 
-  History, 
-  TrendingUp, 
-  TrendingDown, 
+import {
+  LayoutDashboard,
+  PlusCircle,
+  History,
+  TrendingUp,
+  TrendingDown,
   PieChart as PieChartIcon,
   Bot,
   Briefcase,
   ChevronRight,
+  ChevronLeft,
   Filter,
   Trash2,
   Calendar,
@@ -24,7 +25,9 @@ import {
   Target,
   AlertCircle,
   Info,
-  HelpCircle
+  HelpCircle,
+  Download,
+  Upload
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -42,7 +45,7 @@ import {
 import { Transaction, TransactionType, Category } from './types';
 import { getFinancialInsights } from './services/geminiService';
 
-type TimeRange = 'monthly' | 'semiannual' | 'annual' | 'all';
+type TimeRange = 'daily' | 'monthly' | 'semiannual' | 'annual' | 'all';
 
 const App: React.FC = () => {
   const [transactions, setTransactions] = useState<Transaction[]>(() => {
@@ -52,6 +55,10 @@ const App: React.FC = () => {
   
   const [activeTab, setActiveTab] = useState<'dashboard' | 'history' | 'add'>('dashboard');
   const [timeRange, setTimeRange] = useState<TimeRange>('monthly');
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [historyTimeRange, setHistoryTimeRange] = useState<TimeRange>('monthly');
+  const [historySelectedDate, setHistorySelectedDate] = useState(new Date());
+  const [showBackupModal, setShowBackupModal] = useState(false);
   const [aiInsight, setAiInsight] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [showReport, setShowReport] = useState(false);
@@ -74,29 +81,91 @@ const App: React.FC = () => {
     localStorage.setItem('porto_transactions', JSON.stringify(transactions));
   }, [transactions]);
 
-  // Filter Logic
-  const filteredTransactions = useMemo(() => {
-    const now = new Date();
-    return transactions.filter(t => {
+  // Navigation & Filter Utilities
+  const navigatePeriod = (direction: 'prev' | 'next', range: TimeRange, currentDate: Date): Date => {
+    const newDate = new Date(currentDate);
+    const delta = direction === 'next' ? 1 : -1;
+    switch (range) {
+      case 'daily': newDate.setDate(newDate.getDate() + delta); break;
+      case 'monthly': newDate.setMonth(newDate.getMonth() + delta); break;
+      case 'semiannual': newDate.setMonth(newDate.getMonth() + delta * 6); break;
+      case 'annual': newDate.setFullYear(newDate.getFullYear() + delta); break;
+    }
+    return newDate;
+  };
+
+  const getPeriodLabelForDate = (range: TimeRange, date: Date): string => {
+    switch (range) {
+      case 'daily': return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+      case 'monthly': {
+        const label = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+        return label.charAt(0).toUpperCase() + label.slice(1);
+      }
+      case 'semiannual': return `${date.getMonth() < 6 ? '1º' : '2º'} Sem ${date.getFullYear()}`;
+      case 'annual': return `${date.getFullYear()}`;
+      case 'all': return 'Todo o Período';
+    }
+  };
+
+  const getFilteredByPeriod = (txns: Transaction[], range: TimeRange, refDate: Date) => {
+    return txns.filter(t => {
       const tDate = new Date(t.date);
-      if (timeRange === 'all') return true;
-      
-      const isSameYear = tDate.getFullYear() === now.getFullYear();
-      
-      if (timeRange === 'monthly') {
-        return isSameYear && tDate.getMonth() === now.getMonth();
+      if (range === 'all') return true;
+      if (range === 'daily') return tDate.toDateString() === refDate.toDateString();
+
+      const isSameYear = tDate.getFullYear() === refDate.getFullYear();
+
+      if (range === 'monthly') {
+        return isSameYear && tDate.getMonth() === refDate.getMonth();
       }
-      if (timeRange === 'semiannual') {
-        const currentSemester = now.getMonth() < 6 ? 0 : 1;
+      if (range === 'semiannual') {
+        const refSemester = refDate.getMonth() < 6 ? 0 : 1;
         const tSemester = tDate.getMonth() < 6 ? 0 : 1;
-        return isSameYear && tSemester === currentSemester;
+        return isSameYear && tSemester === refSemester;
       }
-      if (timeRange === 'annual') {
+      if (range === 'annual') {
         return isSameYear;
       }
       return true;
     }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [transactions, timeRange]);
+  };
+
+  // Backup functions
+  const exportData = () => {
+    const data = JSON.stringify(transactions, null, 2);
+    const blob = new Blob([data], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `porto-financas-backup-${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importData = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target?.result as string);
+        if (Array.isArray(data) && confirm(`Importar ${data.length} transações? Isso substituirá os dados atuais.`)) {
+          setTransactions(data);
+          setShowBackupModal(false);
+        }
+      } catch {
+        alert('Arquivo inválido. Por favor, selecione um backup válido.');
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  // Filter Logic
+  const filteredTransactions = useMemo(() => {
+    return getFilteredByPeriod(transactions, timeRange, selectedDate);
+  }, [transactions, timeRange, selectedDate]);
+
+  const historyFilteredTransactions = useMemo(() => {
+    return getFilteredByPeriod(transactions, historyTimeRange, historySelectedDate);
+  }, [transactions, historyTimeRange, historySelectedDate]);
 
   const summary = useMemo(() => {
     const income = filteredTransactions.filter(t => t.type === TransactionType.INCOME).reduce((acc, t) => acc + t.amount, 0);
@@ -199,13 +268,7 @@ const App: React.FC = () => {
 
   const fetchAiInsights = async () => {
     setIsAnalyzing(true);
-    const rangeLabels = {
-      monthly: 'Mês Atual',
-      semiannual: 'Semestre Atual',
-      annual: 'Ano Atual',
-      all: 'Todo o Período'
-    };
-    const insight = await getFinancialInsights(filteredTransactions, rangeLabels[timeRange]);
+    const insight = await getFinancialInsights(filteredTransactions, getPeriodLabelForDate(timeRange, selectedDate));
     setAiInsight(insight);
     setIsAnalyzing(false);
   };
@@ -216,14 +279,7 @@ const App: React.FC = () => {
 
   const COLORS = ['#0891B2', '#2DD4BF', '#10B981', '#F43F5E', '#6366F1', '#F59E0B'];
 
-  const getPeriodLabel = () => {
-    switch(timeRange) {
-      case 'monthly': return 'Este Mês';
-      case 'semiannual': return 'Este Semestre';
-      case 'annual': return 'Este Ano';
-      case 'all': return 'Tudo';
-    }
-  };
+  const getPeriodLabel = () => getPeriodLabelForDate(timeRange, selectedDate);
 
   // Animation Variants
   const containerVariants = {
@@ -398,6 +454,81 @@ const App: React.FC = () => {
         )}
       </AnimatePresence>
 
+      {/* Backup Modal */}
+      <AnimatePresence>
+        {showBackupModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[70] bg-slate-900/60 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4"
+            onClick={() => setShowBackupModal(false)}
+          >
+            <motion.div
+              initial={{ y: 100, opacity: 0 }}
+              animate={{ y: 0, opacity: 1, transition: { type: "spring", stiffness: 300, damping: 30 } }}
+              exit={{ y: 100, opacity: 0 }}
+              className="bg-white w-full max-w-sm rounded-t-[2rem] sm:rounded-3xl shadow-2xl p-6"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex justify-between items-start mb-5">
+                <div className="bg-cyan-100 p-3 rounded-2xl">
+                  <Download className="w-6 h-6 text-cyan-600" />
+                </div>
+                <button onClick={() => setShowBackupModal(false)} className="p-2 bg-slate-50 rounded-full text-slate-400 hover:bg-slate-100 transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <h3 className="text-xl font-bold text-slate-800 mb-1">Backup de Dados</h3>
+              <p className="text-slate-400 text-sm mb-6">Exporte ou importe suas transações para não perder seus dados.</p>
+
+              <div className="space-y-3">
+                <motion.button
+                  whileTap={{ scale: 0.95 }}
+                  onClick={exportData}
+                  className="w-full flex items-center gap-4 p-4 bg-emerald-50 hover:bg-emerald-100 rounded-2xl border border-emerald-100 transition-colors group"
+                >
+                  <div className="bg-emerald-500 p-3 rounded-xl text-white group-hover:scale-110 transition-transform">
+                    <Download className="w-5 h-5" />
+                  </div>
+                  <div className="text-left">
+                    <p className="font-bold text-slate-800 text-sm">Exportar Backup</p>
+                    <p className="text-[11px] text-slate-400">{transactions.length} transações • JSON</p>
+                  </div>
+                </motion.button>
+
+                <label className="w-full flex items-center gap-4 p-4 bg-cyan-50 hover:bg-cyan-100 rounded-2xl border border-cyan-100 transition-colors cursor-pointer group">
+                  <div className="bg-cyan-500 p-3 rounded-xl text-white group-hover:scale-110 transition-transform">
+                    <Upload className="w-5 h-5" />
+                  </div>
+                  <div className="text-left">
+                    <p className="font-bold text-slate-800 text-sm">Importar Backup</p>
+                    <p className="text-[11px] text-slate-400">Selecione um arquivo JSON</p>
+                  </div>
+                  <input
+                    type="file"
+                    accept=".json"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) importData(file);
+                    }}
+                  />
+                </label>
+              </div>
+
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setShowBackupModal(false)}
+                className="w-full mt-5 bg-slate-100 text-slate-600 font-bold py-3 rounded-xl hover:bg-slate-200 transition-colors"
+              >
+                Fechar
+              </motion.button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Header */}
       <header className="p-6 bg-gradient-to-br from-[#0891B2] to-[#155E75] text-white shadow-lg rounded-b-[2.5rem] relative overflow-hidden z-30">
         
@@ -429,22 +560,32 @@ const App: React.FC = () => {
               <p className="text-cyan-100 opacity-90 text-sm">Gestão de Flat</p>
             </motion.div>
           </div>
-          <motion.button 
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            onClick={() => setShowReport(true)}
-            className="bg-white/20 p-2.5 rounded-xl shadow-lg backdrop-blur-md border border-white/10 hover:bg-white/30 transition-colors"
-          >
-            <FileText className="w-6 h-6 text-cyan-50" />
-          </motion.button>
+          <div className="flex items-center gap-2">
+            <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              onClick={() => setShowBackupModal(true)}
+              className="bg-white/20 p-2.5 rounded-xl shadow-lg backdrop-blur-md border border-white/10 hover:bg-white/30 transition-colors"
+            >
+              <Download className="w-6 h-6 text-cyan-50" />
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              onClick={() => setShowReport(true)}
+              className="bg-white/20 p-2.5 rounded-xl shadow-lg backdrop-blur-md border border-white/10 hover:bg-white/30 transition-colors"
+            >
+              <FileText className="w-6 h-6 text-cyan-50" />
+            </motion.button>
+          </div>
         </div>
 
         {/* Time Filter Tabs */}
-        <div className="flex p-1 bg-black/20 backdrop-blur-md rounded-2xl mb-6 relative z-10">
-          {(['monthly', 'semiannual', 'annual'] as const).map((range) => (
+        <div className="flex p-1 bg-black/20 backdrop-blur-md rounded-2xl mb-4 relative z-10">
+          {(['monthly', 'semiannual', 'annual', 'all'] as const).map((range) => (
             <button
               key={range}
-              onClick={() => setTimeRange(range)}
+              onClick={() => { setTimeRange(range); if (range === 'all') return; }}
               className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all duration-300 relative ${
                 timeRange === range ? 'text-cyan-800' : 'text-cyan-100 hover:bg-white/10'
               }`}
@@ -456,10 +597,44 @@ const App: React.FC = () => {
                   transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
                 />
               )}
-              <span className="relative z-10">{range === 'monthly' ? 'Mês' : range === 'semiannual' ? 'Semestre' : 'Ano'}</span>
+              <span className="relative z-10">{range === 'monthly' ? 'Mês' : range === 'semiannual' ? 'Semestre' : range === 'annual' ? 'Ano' : 'Tudo'}</span>
             </button>
           ))}
         </div>
+
+        {/* Period Navigation */}
+        {timeRange !== 'all' && (
+          <div className="flex items-center justify-between mb-6 relative z-10">
+            <motion.button
+              whileTap={{ scale: 0.85 }}
+              onClick={() => setSelectedDate(navigatePeriod('prev', timeRange, selectedDate))}
+              className="bg-white/15 p-2 rounded-xl backdrop-blur-md border border-white/10 hover:bg-white/25 transition-colors"
+            >
+              <ChevronLeft className="w-5 h-5 text-white" />
+            </motion.button>
+            <div className="flex items-center gap-3">
+              <span className="text-white font-bold text-sm">
+                {getPeriodLabelForDate(timeRange, selectedDate)}
+              </span>
+              {selectedDate.toDateString() !== new Date().toDateString() && (
+                <motion.button
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => setSelectedDate(new Date())}
+                  className="bg-white/20 px-3 py-1 rounded-lg text-[10px] font-bold text-cyan-50 hover:bg-white/30 transition-colors border border-white/10"
+                >
+                  Hoje
+                </motion.button>
+              )}
+            </div>
+            <motion.button
+              whileTap={{ scale: 0.85 }}
+              onClick={() => setSelectedDate(navigatePeriod('next', timeRange, selectedDate))}
+              className="bg-white/15 p-2 rounded-xl backdrop-blur-md border border-white/10 hover:bg-white/25 transition-colors"
+            >
+              <ChevronRight className="w-5 h-5 text-white" />
+            </motion.button>
+          </div>
+        )}
 
         {/* Balance Card */}
         <motion.div 
@@ -882,7 +1057,7 @@ const App: React.FC = () => {
 
           {/* History Tab */}
           {activeTab === 'history' && (
-            <motion.div 
+            <motion.div
               key="history"
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -891,18 +1066,78 @@ const App: React.FC = () => {
             >
               <div className="flex justify-between items-center mb-2 px-2">
                 <h3 className="font-bold text-xl text-slate-800">Transações</h3>
-                <div className="flex gap-2">
-                  <span className="bg-slate-100 text-slate-500 px-3 py-1 rounded-full text-xs font-bold">
-                    {filteredTransactions.length} registros
-                  </span>
-                </div>
+                <span className="bg-slate-100 text-slate-500 px-3 py-1 rounded-full text-xs font-bold">
+                  {historyFilteredTransactions.length} registros
+                </span>
               </div>
-              
+
+              {/* History Filter Bar */}
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-3 space-y-3">
+                <div className="flex p-1 bg-slate-100 rounded-xl">
+                  {(['daily', 'monthly', 'semiannual', 'annual', 'all'] as const).map((range) => (
+                    <button
+                      key={range}
+                      onClick={() => setHistoryTimeRange(range)}
+                      className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold transition-all duration-200 relative ${
+                        historyTimeRange === range ? 'text-white' : 'text-slate-400 hover:text-slate-600'
+                      }`}
+                    >
+                      {historyTimeRange === range && (
+                        <motion.div
+                          layoutId="history-tab-highlight"
+                          className="absolute inset-0 bg-cyan-600 rounded-lg shadow-sm"
+                          transition={{ type: "spring", bounce: 0.2, duration: 0.5 }}
+                        />
+                      )}
+                      <span className="relative z-10">{
+                        range === 'daily' ? 'Dia' :
+                        range === 'monthly' ? 'Mês' :
+                        range === 'semiannual' ? 'Sem' :
+                        range === 'annual' ? 'Ano' : 'Tudo'
+                      }</span>
+                    </button>
+                  ))}
+                </div>
+
+                {historyTimeRange !== 'all' && (
+                  <div className="flex items-center justify-between">
+                    <motion.button
+                      whileTap={{ scale: 0.85 }}
+                      onClick={() => setHistorySelectedDate(navigatePeriod('prev', historyTimeRange, historySelectedDate))}
+                      className="bg-slate-100 p-1.5 rounded-lg hover:bg-slate-200 transition-colors"
+                    >
+                      <ChevronLeft className="w-4 h-4 text-slate-500" />
+                    </motion.button>
+                    <div className="flex items-center gap-2">
+                      <span className="text-slate-700 font-bold text-xs">
+                        {getPeriodLabelForDate(historyTimeRange, historySelectedDate)}
+                      </span>
+                      {historySelectedDate.toDateString() !== new Date().toDateString() && (
+                        <motion.button
+                          whileTap={{ scale: 0.9 }}
+                          onClick={() => setHistorySelectedDate(new Date())}
+                          className="bg-cyan-50 px-2 py-0.5 rounded-md text-[10px] font-bold text-cyan-600 hover:bg-cyan-100 transition-colors"
+                        >
+                          Hoje
+                        </motion.button>
+                      )}
+                    </div>
+                    <motion.button
+                      whileTap={{ scale: 0.85 }}
+                      onClick={() => setHistorySelectedDate(navigatePeriod('next', historyTimeRange, historySelectedDate))}
+                      className="bg-slate-100 p-1.5 rounded-lg hover:bg-slate-200 transition-colors"
+                    >
+                      <ChevronRight className="w-4 h-4 text-slate-500" />
+                    </motion.button>
+                  </div>
+                )}
+              </div>
+
               <AnimatePresence>
-                {filteredTransactions.length > 0 ? (
-                  filteredTransactions.map(t => (
-                    <motion.div 
-                      key={t.id} 
+                {historyFilteredTransactions.length > 0 ? (
+                  historyFilteredTransactions.map(t => (
+                    <motion.div
+                      key={t.id}
                       layout
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
@@ -926,9 +1161,9 @@ const App: React.FC = () => {
                         <span className={`font-bold text-base ${t.type === TransactionType.INCOME ? 'text-emerald-600' : 'text-rose-600'}`}>
                           {t.type === TransactionType.INCOME ? '+' : '-'} {t.amount.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}
                         </span>
-                        <motion.button 
+                        <motion.button
                           whileTap={{ scale: 0.8 }}
-                          onClick={() => deleteTransaction(t.id)} 
+                          onClick={() => deleteTransaction(t.id)}
                           className="text-slate-300 hover:text-rose-500 transition-colors p-1 hover:bg-rose-50 rounded-lg"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -937,7 +1172,7 @@ const App: React.FC = () => {
                     </motion.div>
                   ))
                 ) : (
-                  <motion.div 
+                  <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     className="text-center py-20 flex flex-col items-center"
@@ -947,7 +1182,7 @@ const App: React.FC = () => {
                     </div>
                     <h3 className="text-slate-600 font-bold">Nada por aqui</h3>
                     <p className="text-slate-400 text-sm mt-1 max-w-[200px]">Nenhuma transação encontrada para o filtro selecionado.</p>
-                    <button onClick={() => setTimeRange('all')} className="mt-4 text-cyan-600 font-bold text-sm">
+                    <button onClick={() => setHistoryTimeRange('all')} className="mt-4 text-cyan-600 font-bold text-sm">
                       Ver todo o histórico
                     </button>
                   </motion.div>
